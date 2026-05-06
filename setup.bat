@@ -15,9 +15,10 @@ echo [OK] Python found
 
 REM Install Python deps
 echo [*] Installing Python dependencies...
-pip install networkx numpy pydantic pydantic-settings typer rich httpx pyyaml openai anthropic websockets fastapi uvicorn python-multipart PyMuPDF
+pip install -r requirements.txt
 if %errorlevel% neq 0 (
-    echo [WARN] Some packages failed to install. Continuing...
+    echo [WARN] Some packages failed to install. Trying individually...
+    pip install networkx numpy pydantic pydantic-settings typer rich httpx pyyaml websockets fastapi uvicorn python-multipart PyMuPDF
 )
 
 REM Check Java
