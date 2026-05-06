@@ -19,3 +19,12 @@ output/
 fr_extract/
 /tmp/
 *.log
+*.kicad_pcb
+*.json
+!pyproject.json
+output/
+*.dsn
+*.ses
+*.kicad_prl
+*.kicad_pro
+monocle-schematics.pdf
