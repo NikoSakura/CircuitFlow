@@ -28,3 +28,6 @@ output/
 *.kicad_prl
 *.kicad_pro
 monocle-schematics.pdf
+*.exe
+patch_fr.py
+xx.txt
