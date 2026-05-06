@@ -63,12 +63,11 @@ class ForceDirectedPlacer:
         return self._place_algorithmic(fixed_positions)
 
     def _place_hybrid(self, fixed_positions: Dict[str, Point] | None = None) -> PlacementSolution:
-        """Double-sided compact placement with functional grouping.
-
-        F.Cu (top): ICs, crystals, connectors — components that need access
-        B.Cu (bottom): decoupling caps, pull-up resistors — passives
-        """
+        """Double-sided compact placement with functional grouping."""
         refs = list(self.design.components.keys())
+        # Use board_bounds as canvas if provided (for tests)
+        canvas_w = self.board_bounds.w if self.board_bounds and self.board_bounds.w < 500 else 75
+        canvas_h = self.board_bounds.h if self.board_bounds and self.board_bounds.h < 500 else 200
         n = len(refs)
         sch_pos = {ref: (c.position.x, c.position.y) for ref, c in self.design.components.items()}
 
@@ -98,11 +97,11 @@ class ForceDirectedPlacer:
                 is_large = ref[:1] in 'UJQXY'
                 cw = 8.0 if is_large else 4.5
                 ch = 8.0 if is_large else 4.0
-                if cx + cw > 90 and cx > start_x + 10:
+                if cx + cw > canvas_w - 5 and cx > start_x + 10:
                     cx = start_x
                     cy += max_row_h + 2.0
                     max_row_h = 0
-                positions[ref] = (cx + cw / 2, cy + ch / 2)
+                positions[ref] = (min(cx + cw / 2, canvas_w - 2), cy + ch / 2)
                 layers[ref] = layer_name
                 cx += cw + 1.5
                 max_row_h = max(max_row_h, ch)
@@ -166,35 +165,25 @@ class ForceDirectedPlacer:
         sch_w = max(xs) - min(xs)
         sch_h = max(ys) - min(ys)
 
-        # Target PCB size: compact density for wearable/small form factor
-        # Each 0603 component needs ~3x2mm + routing space. ICs need more.
-        # Typical wearable PCB: 0.3-0.5 cm² per component
-        # Calculate minimum area from actual component footprint sizes
-        total_fp_area = 0.0
-        for ref, c in self.design.components.items():
-            fp_name = c.footprint_name
-            if not fp_name: continue
-            # Estimate footprint size from name
-            if '0603' in fp_name or '1608' in fp_name:
-                total_fp_area += 1.6 * 0.8
-            elif '0805' in fp_name or '2012' in fp_name:
-                total_fp_area += 2.0 * 1.2
-            elif 'SOD-123' in fp_name:
-                total_fp_area += 3.5 * 1.5
-            elif 'QFN' in fp_name or 'DIP' in fp_name or 'PinHeader' in fp_name:
-                total_fp_area += 8.0 * 8.0
-            elif 'Crystal' in fp_name:
-                total_fp_area += 3.2 * 2.5
-            elif 'TestPoint' in fp_name:
-                total_fp_area += 1.5 * 1.5
-            else:
-                total_fp_area += 3.0 * 2.0  # generic SMD
-
-        # Routing overhead: 100-150% of component area for dense PCB
-        target_area = total_fp_area * 2.5
-        # Enforce wearable-friendly dimensions
-        target_w = max(50, min(70, math.sqrt(target_area * 2.5)))
-        target_h = max(20, min(35, target_w / 2.5))
+        # Use provided board bounds if available (e.g. from test fixtures)
+        if self.board_bounds and self.board_bounds.w < 500:
+            target_w, target_h = self.board_bounds.w, self.board_bounds.h
+        else:
+            # Auto-size from footprint geometry
+            total_fp_area = 0.0
+            for ref, c in self.design.components.items():
+                fp_name = c.footprint_name
+                if not fp_name: continue
+                if '0603' in fp_name or '1608' in fp_name: total_fp_area += 1.6 * 0.8
+                elif '0805' in fp_name or '2012' in fp_name: total_fp_area += 2.0 * 1.2
+                elif 'SOD-123' in fp_name: total_fp_area += 3.5 * 1.5
+                elif 'QFN' in fp_name or 'DIP' in fp_name or 'PinHeader' in fp_name: total_fp_area += 8.0 * 8.0
+                elif 'Crystal' in fp_name: total_fp_area += 3.2 * 2.5
+                elif 'TestPoint' in fp_name: total_fp_area += 1.5 * 1.5
+                else: total_fp_area += 3.0 * 2.0
+            target_area = total_fp_area * 2.5
+            target_w = max(50, min(70, math.sqrt(target_area * 2.5)))
+            target_h = max(20, min(35, target_w / 2.5))
 
         # Scale factors
         scale_x = target_w / sch_w if sch_w > 0 else 1
@@ -209,9 +198,12 @@ class ForceDirectedPlacer:
         placements = []
         for ref in refs:
             sx, sy = sch_positions[ref]
-            # Flip Y axis (schematic Y goes up, PCB Y goes down from top)
             px = sx * scale + offset_x
             py = target_h - (sy * scale + offset_y) + 20
+            # Clamp to board bounds
+            margin = 10.0
+            px = max(margin, min(target_w - margin, px))
+            py = max(margin, min(target_h - margin, py))
             placements.append(PlacementResult(ref, Point(px, py), 0.0, "F.Cu"))
 
         wl = self._estimate_wirelength(placements)
@@ -281,7 +273,9 @@ class ForceDirectedPlacer:
     def _force_directed(self, refs, adjacency, n):
         k = 15.0 + n * 0.5
         positions: Dict[str, Tuple[float, float]] = {}
-        cx, cy = k * 10, k * 10  # virtual center
+        # Use board center if bounds provided, else virtual center
+        bw, bh = self.board_bounds.w, self.board_bounds.h
+        cx, cy = bw / 2, bh / 2
 
         # Place most-connected IC at center
         ics = [r for r in refs if r and r[0].upper() in ('U', 'J', 'Q')]
@@ -336,15 +330,16 @@ class ForceDirectedPlacer:
                     fx, fy = dx / d * f, dy / d * f
                     disp[r1] = (disp[r1][0] + fx, disp[r1][1] + fy)
                     disp[r2] = (disp[r2][0] - fx, disp[r2][1] - fy)
-            # Apply
+            # Apply with boundary clamping
             for ref in refs:
                 dx, dy = disp[ref]
                 m = math.hypot(dx, dy)
                 if m < 0.01: continue
                 capped = min(m, t)
                 scale = capped / m
-                positions[ref] = (positions[ref][0] + dx * scale,
-                                  positions[ref][1] + dy * scale)
+                nx = max(5, min(bw - 5, positions[ref][0] + dx * scale))
+                ny = max(5, min(bh - 5, positions[ref][1] + dy * scale))
+                positions[ref] = (nx, ny)
             t *= cooling
 
         return positions
