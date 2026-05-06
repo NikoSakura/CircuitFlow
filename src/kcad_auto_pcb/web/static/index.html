@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kcad-auto-pcb</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#f5f5f5;color:#333;height:100vh;display:flex}
+/* Sidebar */
+#sidebar{width:280px;min-width:280px;background:#fff;border-right:1px solid #e0e0e0;display:flex;flex-direction:column}
+#sidebar-header{padding:16px;border-bottom:1px solid #e0e0e0;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+#sidebar-header .logo{width:32px;height:32px;background:#4CAF50;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px}
+#sidebar-body{flex:1;overflow-y:auto;padding:12px}
+#sidebar-body h3{font-size:11px;color:#999;text-transform:uppercase;margin:12px 0 6px}
+.param-row{display:flex;gap:8px;margin-bottom:6px;align-items:center}
+.param-row label{font-size:12px;color:#666;width:36px}
+.param-row input,.param-row select{flex:1;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;outline:none}
+.param-row input:focus{border-color:#4CAF50}
+#sidebar-body button{width:100%;padding:8px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;margin-top:6px}
+.btn-gen{background:#4CAF50;color:#fff}.btn-gen:hover{background:#43A047}
+.btn-out{background:#f5f5f5;color:#666;border:1px solid #ddd}.btn-out:hover{background:#eee}
+/* Main chat */
+#main{flex:1;display:flex;flex-direction:column;background:#fafafa}
+#main-header{padding:12px 20px;background:#fff;border-bottom:1px solid #e0e0e0;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+#main-header .dot{width:8px;height:8px;border-radius:50%;background:#4CAF50}
+#messages{flex:1;overflow-y:auto;padding:16px}
+.msg-wrap{display:flex;gap:10px;margin-bottom:16px;animation:fadeIn .3s}
+.msg-wrap.user{flex-direction:row-reverse}
+.avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.avatar.agent{background:#E8F5E9;color:#4CAF50}
+.avatar.user{background:#E3F2FD;color:#1976D2}
+.bubble{max-width:70%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;word-break:break-word}
+.bubble.agent{background:#fff;border:1px solid #e0e0e0;border-top-left-radius:4px}
+.bubble.user{background:#E3F2FD;border-top-right-radius:4px}
+.bubble.system{background:#FFF8E1;border:1px solid #FFE082;font-size:12px;color:#888;max-width:90%;text-align:center;margin:0 auto}
+.bubble.thinking{background:#F3E5F5;border:1px solid #CE93D8;animation:pulse 2s infinite}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+#input-bar{padding:12px 20px;background:#fff;border-top:1px solid #e0e0e0;display:flex;gap:8px}
+#input-bar input{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:20px;font-size:13px;outline:none}
+#input-bar input:focus{border-color:#4CAF50}
+#input-bar button{width:40px;height:40px;border-radius:50%;border:none;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center}
+#send-btn{background:#4CAF50;color:#fff}
+#file-btn{background:#f5f5f5;color:#666;border:1px solid #ddd!important}
+/* Preview drawer */
+#preview-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:100;justify-content:center;align-items:center}
+#preview-overlay.show{display:flex}
+#preview-box{background:#fff;border-radius:12px;padding:20px;max-width:90vw;max-height:90vh;overflow:auto;position:relative}
+#preview-box svg{max-width:100%}
+#close-preview{position:absolute;top:10px;right:10px;background:none;border:none;font-size:22px;cursor:pointer;color:#999}
+/* Settings */
+#settings-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:100;justify-content:center;align-items:center}
+#settings-overlay.show{display:flex}
+#settings-box{background:#fff;border-radius:12px;padding:24px;width:500px;max-height:80vh;overflow-y:auto}
+#settings-box h2{font-size:16px;margin-bottom:12px}
+.prov-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #eee;font-size:13px}
+.prov-item .name{font-weight:500;min-width:80px}
+.prov-item .info{color:#999;font-size:12px;flex:1}
+.prov-item button{font-size:11px;padding:3px 8px;border:1px solid #ddd;border-radius:4px;cursor:pointer;background:#fff}
+.prov-item .btn-act{color:#4CAF50;border-color:#4CAF50}
+.prov-item .btn-del{color:#e53935;border-color:#e53935}
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <div id="sidebar-header"><svg width="32" height="32" viewBox="0 0 32 32" style="border-radius:8px">
+  <rect width="32" height="32" rx="6" fill="#1a1a2e"/>
+  <rect x="4" y="2" width="24" height="28" rx="2" fill="none" stroke="#00e676" stroke-width="1.5"/>
+  <line x1="10" y1="8" x2="22" y2="8" stroke="#448aff" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="22" y1="8" x2="22" y2="16" stroke="#448aff" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="10" y1="14" x2="18" y2="14" stroke="#ffab00" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="18" y1="14" x2="18" y2="22" stroke="#ffab00" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="10" cy="8" r="2.5" fill="#448aff"/>
+  <circle cx="10" cy="14" r="2.5" fill="#ffab00"/>
+  <circle cx="18" cy="22" r="2.5" fill="#00e676"/>
+  <rect x="5" y="23" width="18" height="3" rx="1.5" fill="#666"/>
+</svg> PCB Agent</div>
+  <div id="sidebar-body">
+    <button class="btn-out" onclick="document.getElementById('settings-overlay').classList.add('show');loadProviders();loadTemplates()" style="margin-bottom:8px">⚙ 供应商设置</button>
+    <h3>板子参数</h3>
+    <div class="param-row"><label>宽</label><input id="param-w" type="number" placeholder="auto" step="1"></div>
+    <div class="param-row"><label>高</label><input id="param-h" type="number" placeholder="auto" step="1"></div>
+    <div class="param-row"><label>层</label><select id="param-l"><option value="0">auto</option><option value="2">2 层</option><option value="4">4 层</option><option value="6">6 层</option></select></div>
+    <button class="btn-gen" onclick="applyParams()">应用参数</button>
+    <button class="btn-gen" onclick="generatePCB()" style="margin-top:4px">⚡ 生成 PCB</button>
+    <div id="sidebar-status" style="font-size:11px;color:#999;margin-top:8px"></div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="main-header"><span class="dot"></span> 对话</div>
+  <div id="messages">
+    <div class="msg-wrap">
+      <div class="avatar agent">🤖</div>
+      <div class="bubble agent">你好！上传原理图（PDF 或 .kicad_sch），然后告诉我设计需求。比如"这是智能眼镜主板，要窄长条"。</div>
+    </div>
+  </div>
+  <div id="input-bar">
+    <input type="file" id="file-input" accept=".pdf,.kicad_sch,.sch" onchange="uploadFile()" style="display:none">
+    <button id="file-btn" onclick="document.getElementById('file-input').click()">📎</button>
+    <input type="text" id="msg-input" placeholder="输入消息..." autofocus onkeydown="if(event.key==='Enter')sendMessage()">
+    <button id="send-btn" onclick="sendMessage()">➤</button>
+  </div>
+</div>
+
+<!-- Preview overlay -->
+<div id="preview-overlay" onclick="if(event.target===this)this.classList.remove('show')">
+  <div id="preview-box">
+    <button id="close-preview" onclick="document.getElementById('preview-overlay').classList.remove('show')">×</button>
+    <div id="preview-content"></div>
+  </div>
+</div>
+
+<!-- Settings overlay -->
+<div id="settings-overlay" onclick="if(event.target===this)this.classList.remove('show')">
+  <div id="settings-box">
+    <h2>⚙ 供应商配置</h2>
+    <div id="prov-list">加载中...</div>
+    <div style="border-top:1px solid #eee;padding-top:12px;margin-top:8px">
+      <h3 style="font-size:12px;color:#999;margin-bottom:8px">添加新供应商</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="template-btns">加载中...</div>
+      <input id="new-name" placeholder="名称 (自定义)" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;margin-bottom:6px">
+      <input id="new-key" placeholder="API Key" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;margin-bottom:6px">
+      <div style="display:flex;gap:4px;margin-bottom:6px">
+        <input id="new-model" placeholder="模型名" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px">
+        <button onclick="fetchModels()" style="padding:6px 10px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:12px" id="fetch-btn">🔍</button>
+      </div>
+      <select id="new-model-list" style="width:100%;padding:4px;font-size:11px;display:none;margin-bottom:6px" onchange="document.getElementById('new-model').value=this.value"></select>
+      <button onclick="addProvider()" style="width:100%;padding:8px;background:#4CAF50;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px">添加供应商</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let SID = localStorage.getItem('kcad_sid') || crypto.randomUUID().slice(0,8);
+localStorage.setItem('kcad_sid', SID);
+let WS = null;
+const msgDiv = document.getElementById('messages');
+
+function connectWS() {
+  const proto = location.protocol==='https:'?'wss:':'ws:';
+  WS = new WebSocket(`${proto}//${location.host}/ws/chat/${SID}`);
+  WS.onopen = () => addMsg('system','已连接');
+  WS.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.type==='ready'){ SID=d.session_id; localStorage.setItem('kcad_sid',SID); updateSidebar(d.params); }
+    else if (d.type==='thinking') addMsg('thinking', d.content);
+    else if (d.type==='done'){
+      document.querySelectorAll('.thinking').forEach(el=>el.remove());
+      if (d.reply) addMsg('agent', d.reply);
+      if (d.params) updateSidebar(d.params);
+      if (d.svg) showPreview(d.svg);
+    }
+    else if (d.type==='error') addMsg('system','❌ '+d.reply);
+  };
+  WS.onclose = () => setTimeout(connectWS, 3000);
+}
+
+function addMsg(role, text) {
+  const avatars = {agent:'🤖',user:'👤',system:'📢',thinking:'💭'};
+  const wrap = document.createElement('div');
+  wrap.className = `msg-wrap ${role==='user'?'user':''}`;
+  wrap.innerHTML = role==='system'
+    ? `<div class="bubble system">${text}</div>`
+    : `<div class="avatar ${role==='user'?'user':'agent'}">${avatars[role]||'🤖'}</div><div class="bubble ${role}">${text}</div>`;
+  msgDiv.appendChild(wrap);
+  msgDiv.scrollTop = msgDiv.scrollHeight;
+}
+
+function updateSidebar(p) {
+  if (p) {
+    if (p.width) document.getElementById('param-w').value = p.width;
+    if (p.height) document.getElementById('param-h').value = p.height;
+    if (p.layers) {
+      const lv = p.layers;
+      // Clamp to valid options: auto=0, else 2/4/6
+      document.getElementById('param-l').value = [0,2,4,6].includes(lv) ? lv : (lv>4?6:lv>2?4:2);
+    }
+    document.getElementById('sidebar-status').textContent = `${p.width||'?'}×${p.height||'?'}mm ${p.layers||'auto'}层`;
+  }
+}
+
+function sendMessage() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text || !WS || WS.readyState!==WebSocket.OPEN) return;
+  addMsg('user', text);
+  WS.send(JSON.stringify({type:'message',content:text}));
+  input.value = '';
+}
+
+function uploadFile() {
+  const file = document.getElementById('file-input').files[0];
+  if (!file||!WS||WS.readyState!==WebSocket.OPEN) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    WS.send(JSON.stringify({type:'upload_file',filename:file.name,data:reader.result.split(',')[1]}));
+    addMsg('system',`📎 ${file.name}`);
+  };
+  reader.readAsDataURL(file);
+}
+
+function applyParams() {
+  const w = document.getElementById('param-w').value;
+  const h = document.getElementById('param-h').value;
+  const l = document.getElementById('param-l').value;
+  let msg = [];
+  if(w) msg.push('width '+w);
+  if(h) msg.push('height '+h);
+  if(l) msg.push('layers '+l);
+  if(msg.length && WS && WS.readyState===WebSocket.OPEN) {
+    const text = msg.join(' ');
+    addMsg('user', text);
+    WS.send(JSON.stringify({type:'message',content:text}));
+  }
+}
+
+function generatePCB() {
+  if (!WS || WS.readyState!==WebSocket.OPEN) return;
+  addMsg('user','generate');
+  WS.send(JSON.stringify({type:'message',content:'generate'}));
+  addMsg('thinking','正在生成 PCB...');
+}
+
+function showPreview(svg) {
+  document.getElementById('preview-content').innerHTML = svg;
+  document.getElementById('preview-overlay').classList.add('show');
+}
+
+// ── Settings ──────────────────────────────
+async function loadProviders() {
+  try {
+    await loadTemplates();  // ensure templates loaded for icons
+    const r = await fetch('/api/providers'); const d = await r.json();
+    let html = '';
+    d.providers.forEach(p => {
+      const act = p.id === d.active_id;
+      const tpl = templates[p.type] || {};
+      const icon = tpl.icon ? `<img src="${tpl.icon}" style="width:16px;height:16px;vertical-align:middle;margin-right:4px" onerror="this.style.display='none'">` : '';
+      html += `<div class="prov-item">
+        ${icon}<span class="name" style="${act?'color:#4CAF50;font-weight:600':''}">${p.name}${act?' ✓':''}</span>
+        <span class="info">${p.type}/${p.default_model||'?'} ${p.has_key?'🔑':''}</span>
+        ${!act?`<button class="btn-act" onclick="activateProvider('${p.id}')">启用</button>`:''}
+        <button class="btn-del" onclick="deleteProvider('${p.id}')">删</button>
+        <button onclick="editProvider('${p.id}','${p.name}','${p.default_model||''}')">✎</button>
+      </div>`;
+    });
+    document.getElementById('prov-list').innerHTML = html || '<span style="color:#999">暂无</span>';
+  } catch(e) { document.getElementById('prov-list').innerHTML = '加载失败'; }
+}
+
+async function editProvider(id, name, model) {
+  const key = prompt(`修改 ${name} 的 API Key:`, '');
+  if (key === null) return;
+  const newModel = prompt(`修改 ${name} 的模型:`, model);
+  if (newModel === null) return;
+  const body = JSON.stringify({api_key:key, default_model:newModel, models:[newModel]});
+  await fetch('/api/providers/'+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body});
+  loadProviders();
+}
+
+async function activateProvider(id) { await fetch('/api/providers/'+id+'/activate',{method:'POST'}); loadProviders(); }
+async function deleteProvider(id) { if(!confirm('删除？'))return; await fetch('/api/providers/'+id,{method:'DELETE'}); loadProviders(); }
+
+let selectedTemplate = null;
+let templates = {};
+
+async function loadTemplates() {
+  try {
+    const r = await fetch('/api/providers/templates'); const d = await r.json();
+    templates = d.templates || {};
+    let html = '';
+    for (const [key, t] of Object.entries(templates)) {
+      const icon = t.icon ? `<img src="${t.icon}" style="width:14px;height:14px;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '';
+      html += `<button onclick="selectTemplate('${key}')" style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;cursor:pointer;font-size:11px;background:#fff;white-space:nowrap;margin:1px" id="tpl-${key}">${icon}${t.name||key}</button>`;
+    }
+    document.getElementById('template-btns').innerHTML = html;
+  } catch(e) { document.getElementById('template-btns').innerHTML = '加载失败'; }
+}
+
+function selectTemplate(key) {
+  selectedTemplate = key;
+  const t = templates[key];
+  if (!t) return;
+  document.getElementById('new-name').value = t.name || '';
+  document.getElementById('new-name').placeholder = t.name || '自定义名称';
+  document.querySelectorAll('#template-btns button').forEach(b=>b.style.background='#fff');
+  document.getElementById('tpl-'+key).style.background = '#E8F5E9';
+  if (t.base_url) {
+    // Auto-set base URL hint
+    document.getElementById('new-model').placeholder = t.base_url.includes('dashscope') ? 'qwen3.6-plus' : '模型名';
+  }
+}
+
+async function fetchModels() {
+  const key = document.getElementById('new-key').value.trim();
+  if (!key || !selectedTemplate) return alert('请先选择模板并填API Key');
+  const t = templates[selectedTemplate];
+  if (!t) return;
+  document.getElementById('fetch-btn').textContent = '...';
+  try {
+    const r = await fetch('/api/providers/fetch-models', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: t.type, api_key: key, base_url: t.base_url||''})
+    });
+    const d = await r.json();
+    if (d.models && d.models.length) {
+      const sel = document.getElementById('new-model-list');
+      sel.innerHTML = d.models.map(m=>`<option>${m}</option>`).join('');
+      sel.style.display = 'block';
+      document.getElementById('new-model').value = d.models[0];
+    }
+  } catch(e) { alert('获取失败: '+e.message); }
+  document.getElementById('fetch-btn').textContent = '🔍';
+}
+
+async function addProvider() {
+  const name = document.getElementById('new-name').value.trim();
+  const key = document.getElementById('new-key').value.trim();
+  const model = document.getElementById('new-model').value.trim();
+  if (!name||!key||!model) return alert('名称、Key、模型必填');
+  const t = selectedTemplate ? templates[selectedTemplate] : null;
+  const type = t ? t.type : 'openai_compatible';
+  const url = t ? (t.base_url||'') : '';
+  const body = JSON.stringify({name,type,api_key:key,base_url:url,models:[model],default_model:model});
+  await fetch('/api/providers',{method:'POST',headers:{'Content-Type':'application/json'},body});
+  document.getElementById('new-name').value='';
+  document.getElementById('new-key').value='';
+  document.getElementById('new-model').value='';
+  loadProviders();
+}
+
+connectWS();
+</script>
+</body>
+</html>

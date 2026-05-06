@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kcad-auto-pcb"
+version = "0.1.0"
+description = "AI-driven automatic PCB design from KiCad schematics"
+requires-python = ">=3.10"
+dependencies = [
+    "networkx>=3.0",
+    "numpy>=1.24",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "typer>=0.9",
+    "rich>=13.0",
+    "httpx>=0.24",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+anthropic = ["anthropic>=0.30"]
+web = ["gradio>=4.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+    "gradio>=4.0",
+]
+
+[project.scripts]
+kcad-auto-pcb = "kcad_auto_pcb.cli.main:app"
+kcad-auto-pcb-web = "kcad_auto_pcb.web.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kcad_auto_pcb"]

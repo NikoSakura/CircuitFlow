@@ -1,0 +1,56 @@
+rules:
+  - id: PWR_TRACE_WIDTH
+    category: routing
+    description: 电源线宽计算
+    condition: net_class == 'power'
+    formula: width_mm = max(0.5, 0.3 * max_current_A)
+    default_current_A: 1.0
+    default_width_mm: 0.5
+    priority: CRITICAL
+
+  - id: SIGNAL_TRACE_WIDTH
+    category: routing
+    constraint: width >= 0.25
+    default_width_mm: 0.25
+    priority: HIGH
+
+  - id: SIGNAL_SPACING
+    category: clearance
+    constraint: spacing >= 0.15
+    priority: HIGH
+
+  - id: BOARD_EDGE_CLEARANCE
+    category: placement
+    constraint: component_to_edge >= 0.5
+    priority: HIGH
+
+  - id: COMPONENT_SPACING
+    category: placement
+    constraint: component_to_component >= 2.0
+    priority: HIGH
+
+  - id: VIA_DRILL_MIN
+    category: via
+    constraint: drill >= 0.3
+    default_drill: 0.6
+
+  - id: VIA_SIZE_MIN
+    category: via
+    constraint: size >= 0.6
+    default_size: 1.0
+
+  - id: TRACE_TO_TRACE
+    category: clearance
+    constraint: spacing >= 0.15
+    priority: HIGH
+
+  - id: TRACE_TO_PAD
+    category: clearance
+    constraint: spacing >= 0.15
+    priority: HIGH
+
+  - id: DECOUPLING_PROXIMITY
+    category: placement
+    constraint: capacitor_to_ic_pin <= 5.0
+    description: 去耦电容靠近IC引脚
+    priority: MEDIUM
