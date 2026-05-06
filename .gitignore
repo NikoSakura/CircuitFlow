@@ -31,3 +31,4 @@ monocle-schematics.pdf
 *.exe
 patch_fr.py
 xx.txt
+tests/
